@@ -15,5 +15,8 @@
   "bugs": {
     "url": "https://github.com/shimeyloo/Boats-and-Loads/issues"
   },
-  "homepage": "https://github.com/shimeyloo/Boats-and-Loads#readme"
+  "homepage": "https://github.com/shimeyloo/Boats-and-Loads#readme",
+  "dependencies": {
+    "express": "^4.18.2"
+  }
 }
