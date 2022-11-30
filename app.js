@@ -20,7 +20,7 @@ var errorRes = {
   415: {"Error": "MIME type not acceptable, request must be JSON"}
 };
 
-/* ------------- GENERAL FUNCTIONS ------------- */
+/* ------------- GENERAL FUNCTIONS (start) ------------- */
 function catchError(req) {
   const accepts = req.accepts(['application/json']);
   if(req.get('content-type') !== 'application/json'){          
@@ -47,42 +47,41 @@ function catchError(req) {
   } 
 }
 
-/* ------------- MODEL FUNCTIONS ------------- */
+/* ------------- GENERAL FUNCTIONS (end) ------------- */
+
+
+/* ------------- MODEL FUNCTIONS (start) ------------- */
 async function addBoat(name, type, length, req) {
   const isError = catchError(req)
   if (isError != null ) {
     return isError
   } else {
     var key = datastore.key(BOAT);
-    let newBoat = { "name": name, "type": type, "length": length };
+    let newBoat = { "name": name, "type": type, "length": length, "loads": [] };
     let results = await datastore.save({ "key": key, "data": newBoat }).then(() => { return key });
-    return results
-  };
+    newBoat["id"] = parseInt(results.id)
+    return newBoat
+  }
 };
 
+/* ------------- MODEL FUNCTIONS (end) ------------- */
 
-/* ------------- CONTROLLER FUNCTIONS ------------- */
+
+/* ------------- CONTROLLER FUNCTIONS (start) ------------- */
 // Adds boat
 app.post('/boats', (req, res) => {
     addBoat(req.body.name, req.body.type, req.body.length, req)
-      .then(key => { 
-        if (typeof key == "number") {
-          res.status(key).json(errorRes[key])
+      .then(results => { 
+        if (typeof results == "number") {
+          res.status(results).json(errorRes[results])
         } else {
-          let self = req.protocol + "://" + req.get("host") + req.baseUrl + "/boats/" + key.id
-          let newBoat = { 
-            "id": parseInt(key.id), 
-            "name": req.body.name, 
-            "type": req.body.type, 
-            "length": req.body.length, 
-            "self": self 
-          }
-          // Status 201 is used because something new was created
-          res.status(201).json(newBoat);
+          let self = req.protocol + "://" + req.get("host") + req.baseUrl + "/boats/" + results.id
+          results["self"] = self
+          res.status(201).json(results);
         } 
-      })
+      });
 });
-
+/* ------------- CONTROLLER FUNCTIONS (end) ------------- */
 
 // Listen to the App 
 const PORT = process.env.PORT || 8080;
