@@ -16,6 +16,7 @@ const LOAD = 'Load';
 
 var errorRes = {
   400: {"Error": "At least one attribute is missing and/or invalid"}, 
+  404: {"Error": "No entity with this id exists"},
   406: {"Error": "MIME type not acceptable, response must be JSON"},
   415: {"Error": "MIME type not acceptable, request must be JSON"}
 };
@@ -24,7 +25,18 @@ var errorRes = {
 function fromDatastore(item) {
   item.id = item[Datastore.KEY].id;
   return item;
-}
+};
+
+async function getEntity(id, type) {
+  const key = await datastore.key([type, parseInt(id, 10)]);
+  return datastore.get(key).then((entity) => {
+    if (entity[0] === undefined || entity[0] === null) {
+      return entity; 
+    } else {
+      return entity.map(fromDatastore); 
+    };
+  });
+};
 
 function catchAddBoatErr(req) {
   const accepts = req.accepts(['application/json']);
@@ -50,7 +62,7 @@ function catchAddBoatErr(req) {
     // Status 400 invalid attributes
     return 400
   } 
-}
+};
 
 function catchAddLoadErr(req) {
   const accepts = req.accepts(['application/json']);
@@ -76,10 +88,9 @@ function catchAddLoadErr(req) {
     // Status 400 invalid attributes
     return 400
   } 
-}
+};
 
 /* ------------- GENERAL FUNCTIONS (end) ------------- */
-
 
 /* ------------- MODEL FUNCTIONS (start) ------------- */
 async function addBoat(req) {
@@ -108,15 +119,18 @@ async function addLoad(req) {
   }
 };
 
-async function getEntity(id, type) {
-  const key = await datastore.key([type, parseInt(id, 10)]);
-  return datastore.get(key).then((entity) => {
-    if (entity[0] === undefined || entity[0] === null) {
-      return entity; 
-    } else {
-      return entity.map(fromDatastore); 
-    };
-  });
+async function getBoatOrLoad(req, type) {
+  const accepts = req.accepts(['application/json'])
+  if (!accepts) {                                       
+    // Status 406 MIME type response not acceptable
+    return 406
+  } 
+  let boat = await getEntity(req.params.boat_id, type)
+  if (boat[0] === undefined || boat[0] === null) {
+    // Status 404 No boat with given id found 
+    return 404
+  }
+  return boat
 };
 
 async function loadBoat(boat_id, load_id) {
@@ -172,8 +186,40 @@ async function removeLoadBoat(boat_id, load_id) {
   
   return (boatResults, loadResults)
 }
-/* ------------- MODEL FUNCTIONS (end) ------------- */
 
+async function deleteBoat(boat_id) {
+  let boat = await getEntity(boat_id, BOAT).then((b) => {return b})
+  // Check if boat exist
+  if (boat[0] === undefined || boat[0] === null ) {
+    return 404
+  } 
+  // Remove boat from loads
+  let allLoads = boat[0].loads
+  for (const eachLoad of allLoads) {
+    let load = await getLoad(eachLoad.id).then((l) => {return l});
+    load[0].carrier = null 
+    let keyLoad = datastore.key([LOAD, parseInt(eachLoad.id, 10)]);
+    await datastore.save({"key": keyLoad, "data": load[0]})
+  }
+  // Delete boat
+  let keyBoat = datastore.key([BOAT, parseInt(boat_id, 10)]);
+  await datastore.delete(keyBoat);
+}
+
+// async function deleteLoad(load_id) {
+//   let load = await getEntity(load_id, LOAD).then((b) => {return b})
+//   // Check if load exist
+//   if (load[0] === undefined || load[0] === null ) {
+//     return 404
+//   } 
+//   // Remove load from boat
+//   console.log(load)
+//   // Delete load
+//   let keyLoad = datastore.key([LOAD, parseInt(load_id, 10)]);
+//   await datastore.delete(keyLoad);
+// }
+
+/* ------------- MODEL FUNCTIONS (end) ------------- */
 
 /* ------------- CONTROLLER FUNCTIONS (start) ------------- */
 // Add boat
@@ -204,7 +250,20 @@ app.post('/loads', (req, res) => {
     });
 });
 
-
+// Gets a boat route
+app.get('/boats/:boat_id', (req, res) => {  
+  getBoatOrLoad(req, BOAT)
+    .then(results => {
+      if (typeof results == "number") {
+        res.status(results).json(errorRes[results])
+      } else {
+        let self = req.protocol + "://" + req.get("host") + req.baseUrl + "/boats/" + req.params.boat_id
+        results[0]["self"] = self
+        results[0]["id"] = parseInt(results[0]["id"])
+        res.status(200).json(results);
+      }
+    });
+});
 
 // Assign load to boat
 app.put('/boats/:boat_id/loads/:load_id', (req, res) => {
@@ -231,6 +290,32 @@ app.delete('/boats/:boat_id/loads/:load_id', (req, res) => {
       }
     });
 });
+
+// Delete boat
+app.delete('/boats/:boat_id', (req, res) => {
+  deleteBoat(req.params.boat_id)
+    .then((key) => {
+      if (key == 404) {
+        res.status(404).send('{"Error": "No boat with this boat_id exists"}');
+      } else {
+        res.status(204).end()
+      }
+    });
+});
+
+// // Delete load
+// app.delete('/loads/:load_id', (req, res) => {
+//   deleteLoad(req.params.load_id)
+//     .then((key) => {
+//       if (key == 404) {
+//         res.status(404).send('{"Error": "No load with this load_id exists"}');
+//       } else {
+//         res.status(204).end()
+//       }
+//     });
+// });
+
+
 
 /* ------------- CONTROLLER FUNCTIONS (end) ------------- */
 
