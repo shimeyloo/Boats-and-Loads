@@ -146,6 +146,32 @@ async function loadBoat(boat_id, load_id) {
   return (boatResults, loadResults)
 };
 
+async function removeLoadBoat(boat_id, load_id) {
+  let boat = await getEntity(boat_id, BOAT)
+  let load = await getEntity(load_id, LOAD)
+  // Check if boat or load exist
+  if (boat[0] === undefined || boat[0] === null || load[0] === undefined || load[0] === null ) {
+    return 404
+  } 
+  // Remove load from boat
+  let keyBoat = datastore.key([BOAT, parseInt(boat_id, 10)]); 
+  let allLoads = boat[0].loads
+  let removedLoad = allLoads.filter(l => l.id !== load_id)
+  if (allLoads.length == removedLoad.length) {  
+    // Load not found in boat 
+    return 404
+  }
+  boat[0].loads = removedLoad
+  delete boat[0]["id"]
+  let boatResults = await datastore.save({"key": keyBoat, "data": boat[0]}).then(() => { return keyBoat })
+  // Remove boat from load
+  let keyLoad = datastore.key([LOAD, parseInt(load_id, 10)]); 
+  load[0].carrier = null
+  delete load[0]["id"]
+  let loadResults = await datastore.save({"key": keyLoad, "data": load[0]}).then(() => { return keyLoad })
+  
+  return (boatResults, loadResults)
+}
 /* ------------- MODEL FUNCTIONS (end) ------------- */
 
 
@@ -178,6 +204,8 @@ app.post('/loads', (req, res) => {
     });
 });
 
+
+
 // Assign load to boat
 app.put('/boats/:boat_id/loads/:load_id', (req, res) => {
   loadBoat(req.params.boat_id, req.params.load_id)
@@ -189,6 +217,18 @@ app.put('/boats/:boat_id/loads/:load_id', (req, res) => {
       } else {
         res.status(204).end()
       }  
+    });
+});
+
+// Remove load from boat
+app.delete('/boats/:boat_id/loads/:load_id', (req, res) => {
+  removeLoadBoat(req.params.boat_id, req.params.load_id)
+    .then((key) => {
+      if (key == 404) {
+        res.status(404).send('{"Error": "No boat with this boat_id is loaded with the load with this load_id"}');
+      } else {
+        res.status(204).end()
+      }
     });
 });
 
