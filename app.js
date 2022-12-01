@@ -119,18 +119,32 @@ async function addLoad(req) {
   }
 };
 
-async function getBoatOrLoad(req, type) {
+async function getBoat(req) {
   const accepts = req.accepts(['application/json'])
   if (!accepts) {                                       
     // Status 406 MIME type response not acceptable
     return 406
   } 
-  let boat = await getEntity(req.params.boat_id, type)
+  let boat = await getEntity(req.params.boat_id, BOAT)
   if (boat[0] === undefined || boat[0] === null) {
     // Status 404 No boat with given id found 
     return 404
   }
   return boat
+};
+
+async function getLoad(req) {
+  const accepts = req.accepts(['application/json'])
+  if (!accepts) {                                       
+    // Status 406 MIME type response not acceptable
+    return 406
+  } 
+  let load = await getEntity(req.params.load_id, LOAD)
+  if (load[0] === undefined || load[0] === null) {
+    // Status 404 No load with given id found 
+    return 404
+  }
+  return load
 };
 
 async function loadBoat(boat_id, load_id) {
@@ -146,13 +160,13 @@ async function loadBoat(boat_id, load_id) {
   }
   // Assign load to boat
   let keyBoat = datastore.key([BOAT, parseInt(boat_id, 10)]); 
-  let newLoad = { "id": load_id }
+  let newLoad = { "id": parseInt(load_id, 10) }
   boat[0].loads.push(newLoad);
   delete boat[0]["id"]
   let boatResults = await datastore.save({"key": keyBoat, "data": boat[0]}).then(() => { return keyBoat })
   // Assign boat to load
   let keyLoad = datastore.key([LOAD, parseInt(load_id, 10)]);
-  let carrier = { "id": boat_id, "name": boat[0].name };
+  let carrier = { "id": parseInt(boat_id, 10), "name": boat[0].name };
   load[0].carrier = carrier
   delete load[0]["id"]
   let loadResults = await datastore.save({"key": keyLoad, "data": load[0]}).then(() => { return keyLoad })
@@ -170,7 +184,7 @@ async function removeLoadBoat(boat_id, load_id) {
   // Remove load from boat
   let keyBoat = datastore.key([BOAT, parseInt(boat_id, 10)]); 
   let allLoads = boat[0].loads
-  let removedLoad = allLoads.filter(l => l.id !== load_id)
+  let removedLoad = allLoads.filter(l => l.id == parseInt(boat_id, 10))
   if (allLoads.length == removedLoad.length) {  
     // Load not found in boat 
     return 404
@@ -250,9 +264,9 @@ app.post('/loads', (req, res) => {
     });
 });
 
-// Gets a boat route
+// Gets boat
 app.get('/boats/:boat_id', (req, res) => {  
-  getBoatOrLoad(req, BOAT)
+  getBoat(req)
     .then(results => {
       if (typeof results == "number") {
         res.status(results).json(errorRes[results])
@@ -260,7 +274,22 @@ app.get('/boats/:boat_id', (req, res) => {
         let self = req.protocol + "://" + req.get("host") + req.baseUrl + "/boats/" + req.params.boat_id
         results[0]["self"] = self
         results[0]["id"] = parseInt(results[0]["id"])
-        res.status(200).json(results);
+        res.status(200).json(results[0]);
+      }
+    });
+});
+
+// Gets load
+app.get('/loads/:load_id', (req, res) => {  
+  getLoad(req)
+    .then(results => {
+      if (typeof results == "number") {
+        res.status(results).json(errorRes[results])
+      } else {
+        let self = req.protocol + "://" + req.get("host") + req.baseUrl + "/loads/" + req.params.load_id
+        results[0]["self"] = self
+        results[0]["id"] = parseInt(results[0]["id"])
+        res.status(200).json(results[0]);
       }
     });
 });
