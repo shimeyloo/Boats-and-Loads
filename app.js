@@ -21,6 +21,11 @@ var errorRes = {
 };
 
 /* ------------- GENERAL FUNCTIONS (start) ------------- */
+function fromDatastore(item) {
+  item.id = item[Datastore.KEY].id;
+  return item;
+}
+
 function catchAddBoatErr(req) {
   const accepts = req.accepts(['application/json']);
   if(req.get('content-type') !== 'application/json'){          
@@ -103,6 +108,44 @@ async function addLoad(req) {
   }
 };
 
+async function getEntity(id, type) {
+  const key = await datastore.key([type, parseInt(id, 10)]);
+  return datastore.get(key).then((entity) => {
+    if (entity[0] === undefined || entity[0] === null) {
+      return entity; 
+    } else {
+      return entity.map(fromDatastore); 
+    };
+  });
+};
+
+async function loadBoat(boat_id, load_id) {
+  let boat = await getEntity(boat_id, BOAT)
+  let load = await getEntity(load_id, LOAD)
+  // Check if boat or load exist
+  if (boat[0] === undefined || boat[0] === null || load[0] === undefined || load[0] === null ) {
+    return 404
+  } 
+  // Check if load is already assigned
+  if (load[0].carrier != null) {
+    return 403
+  }
+  // Assign load to boat
+  let keyBoat = datastore.key([BOAT, parseInt(boat_id, 10)]); 
+  let newLoad = { "id": load_id }
+  boat[0].loads.push(newLoad);
+  delete boat[0]["id"]
+  let boatResults = await datastore.save({"key": keyBoat, "data": boat[0]}).then(() => { return keyBoat })
+  // Assign boat to load
+  let keyLoad = datastore.key([LOAD, parseInt(load_id, 10)]);
+  let carrier = { "id": boat_id, "name": boat[0].name };
+  load[0].carrier = carrier
+  delete load[0]["id"]
+  let loadResults = await datastore.save({"key": keyLoad, "data": load[0]}).then(() => { return keyLoad })
+
+  return (boatResults, loadResults)
+};
+
 /* ------------- MODEL FUNCTIONS (end) ------------- */
 
 
@@ -135,6 +178,19 @@ app.post('/loads', (req, res) => {
     });
 });
 
+// Assign load to boat
+app.put('/boats/:boat_id/loads/:load_id', (req, res) => {
+  loadBoat(req.params.boat_id, req.params.load_id)
+    .then((key) => {
+      if (key == 404) {
+        res.status(404).send('{"Error": "The specified boat and/or load does not exist"}');
+      } else if (key == 403) {
+        res.status(403).send('{"Error": "The load is already loaded on another boat"}');
+      } else {
+        res.status(204).end()
+      }  
+    });
+});
 
 /* ------------- CONTROLLER FUNCTIONS (end) ------------- */
 
