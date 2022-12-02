@@ -294,7 +294,10 @@ async function editBoatPATCH(req) {
   let boat = await getEntity(req.params.boat_id, BOAT).then((e) => { return e })
   if (boat[0] === undefined || boat[0] === null) {return 404}
   // Edit boat
-  if (req.body.name != undefined) { boat[0]["name"] = req.body.name };
+  if (req.body.name != undefined) { 
+    boat[0]["name"] = req.body.name 
+    changeCarrierName(boat[0]["loads"], req.body.name)
+  };
   if (req.body.type != undefined) { boat[0]["type"] = req.body.type };
   if (req.body.length != undefined) { boat[0]["length"] = req.body.length };
   let key = datastore.key([BOAT, parseInt(req.params.boat_id, 10)]);
@@ -338,6 +341,32 @@ async function deleteBoat(boat_id) {
 /* ------------- MODEL FUNCTIONS (end) ------------- */
 
 /* ------------- CONTROLLER FUNCTIONS (start) ------------- */
+// Not allowed - Status 405
+app.put('/boats', (req, res) => {
+  res.set('Accept', 'GET')
+  res.status(405).json({"Error": "Not allowed"})
+});
+app.put('/loads', (req, res) => {
+  res.set('Accept', 'GET')
+  res.status(405).json({"Error": "Not allowed"})
+});
+app.patch('/boats', (req, res) => {
+  res.set('Accept', 'GET')
+  res.status(405).json({"Error": "Not allowed"})
+});
+app.patch('/loads', (req, res) => {
+  res.set('Accept', 'GET')
+  res.status(405).json({"Error": "Not allowed"})
+});
+app.delete('/boats', (req, res) => {
+  res.set('Accept', 'GET')
+  res.status(405).json({"Error": "Not allowed"})
+});
+app.delete('/loads', (req, res) => {
+  res.set('Accept', 'GET')
+  res.status(405).json({"Error": "Not allowed"})
+});
+
 // Add boat
 app.post('/boats', (req, res) => {
     addBoat(req)
