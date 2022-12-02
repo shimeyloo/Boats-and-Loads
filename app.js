@@ -47,6 +47,12 @@ async function changeCarrierName(loads, newName) {
   }
 };
 
+async function getEntitiesTotal(type) {
+  const q = datastore.createQuery(type); 
+  let allEntities = await datastore.runQuery(q).then((entity) => {return entity[0].map(fromDatastore)});
+  return allEntities.length
+};
+
 function catchBoatErr(req) {
   const accepts = req.accepts(['application/json']);
   if(req.get('content-type') !== 'application/json'){          
@@ -234,6 +240,23 @@ async function getLoad(req) {
   return load
 };
 
+async function getAllBoats(req) {
+  var q = datastore.createQuery(BOAT).limit(5);
+  const results = {};
+  if(Object.keys(req.query).includes("cursor")){
+      q = q.start(req.query.cursor);
+  }
+  let boatsTotal = await getEntitiesTotal(BOAT)
+  return datastore.runQuery(q).then( (entities) => {
+          results.boats = entities[0].map(fromDatastore);
+          if(entities[1].moreResults !== Datastore.NO_MORE_RESULTS ){
+              results.next = req.protocol + "://" + req.get("host") + req.baseUrl + "/boats?cursor=" + entities[1].endCursor;
+          }
+          results.total_boats = boatsTotal;
+    return results;
+  });
+}
+
 async function loadBoat(boat_id, load_id) {
   let boat = await getEntity(boat_id, BOAT)
   let load = await getEntity(load_id, LOAD)
@@ -377,6 +400,7 @@ async function deleteBoat(boat_id) {
     let load = await getEntity(eachLoad.id, LOAD).then((e) => {return e});
     load[0].carrier = null 
     let keyLoad = datastore.key([LOAD, parseInt(eachLoad.id, 10)]);
+    delete load[0]["id"]
     await datastore.save({"key": keyLoad, "data": load[0]})
   }
   // Delete boat
@@ -395,7 +419,9 @@ async function deleteLoad(load_id) {
   let boat = await getEntity(carrierID, BOAT).then((e) => {return e})
   let removedLoad = boat[0]["loads"].filter(l => l.id != load_id)
   boat[0]["loads"] = removedLoad
+  delete boat[0]["id"]
   let keyBoat = datastore.key([BOAT, carrierID]);
+  delete boat[0]["id"]
   await datastore.save({"key": keyBoat, "data": boat[0]})
   // Delete load
   let keyLoad = datastore.key([LOAD, parseInt(load_id, 10)]);
@@ -500,6 +526,11 @@ app.get('/loads/:load_id', (req, res) => {
         res.status(200).json(results[0]);
       }
     });
+});
+
+// Get all boats with pagination
+app.get('/boats', (req, res) => {
+  getAllBoats(req).then((results) => {res.status(200).json( results )});
 });
 
 // Assign load to boat
@@ -633,8 +664,6 @@ app.delete('/loads/:load_id', (req, res) => {
       }
     });
 });
-
-
 
 /* ------------- CONTROLLER FUNCTIONS (end) ------------- */
 
