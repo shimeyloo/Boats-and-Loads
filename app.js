@@ -216,7 +216,7 @@ async function editBoatPUT(req) {
     return isError
   }
   // Check if boat exists
-  let boat = await getEntity(req.params.boat_id, BOAT).then((b) => { return b })
+  let boat = await getEntity(req.params.boat_id, BOAT).then((e) => { return e })
   if (boat[0] === undefined || boat[0] === null) {
     return 404
   }
@@ -229,6 +229,25 @@ async function editBoatPUT(req) {
   let key = datastore.key([BOAT, parseInt(req.params.boat_id, 10)]);
   await datastore.save({"key": key, "data": boat[0]});
   return boat[0]
+};
+
+async function editLoadPUT(req) {
+  const isError = catchLoadErr(req)
+  if (typeof isError == "number") {
+    return isError
+  }
+  // Check if load exists
+  let load = await getEntity(req.params.load_id, LOAD).then((e) => { return e })
+  if (load[0] === undefined || load[0] === null) {
+    return 404
+  }
+  // Edit load 
+  load[0]["volume"] = req.body.volume
+  load[0]["item"] = req.body.item
+  load[0]["creationDate"] = req.body.creationDate
+  let key = datastore.key([LOAD, parseInt(req.params.load_id, 10)]);
+  await datastore.save({"key": key, "data": load[0]});
+  return load[0]
 };
 
 async function deleteBoat(boat_id) {
@@ -350,7 +369,7 @@ app.delete('/boats/:boat_id/loads/:load_id', (req, res) => {
     });
 });
 
-// Edits boat route using put - all 3 attributes must be provided
+// Edits boat using put - all 3 attributes must be provided
 app.put('/boats/:boat_id', (req, res) => {
   editBoatPUT(req)
     .then((results) => {
@@ -358,6 +377,20 @@ app.put('/boats/:boat_id', (req, res) => {
         res.status(results).json(errorRes[results])
       } else {
         let self = req.protocol + "://" + req.get("host") + req.baseUrl + "/boats/" + results.id
+        results["self"] = self
+        res.status(201).json(results);
+      }
+    });
+});
+
+// Edits load using put - all 3 attributes must be provided
+app.put('/loads/:load_id', (req, res) => {
+  editLoadPUT(req)
+    .then((results) => {
+      if (typeof results == "number") {
+        res.status(results).json(errorRes[results])
+      } else {
+        let self = req.protocol + "://" + req.get("host") + req.baseUrl + "/loads/" + results.id
         results["self"] = self
         res.status(201).json(results);
       }
