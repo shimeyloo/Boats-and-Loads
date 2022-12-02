@@ -38,6 +38,15 @@ async function getEntity(id, type) {
   });
 };
 
+async function changeCarrierName(loads, newName) {
+  for (let eachLoad of loads){
+    let load = await getEntity(eachLoad["id"], LOAD).then((l) => { return l })
+    load[0]["carrier"]["name"] = newName
+    let key = datastore.key([LOAD, eachLoad["id"]]);
+    await datastore.save({"key": key, "data": load[0]});
+  }
+};
+
 function catchBoatErr(req) {
   const accepts = req.accepts(['application/json']);
   if(req.get('content-type') !== 'application/json'){          
@@ -90,12 +99,42 @@ function catchLoadErr(req) {
   } 
 };
 
-async function changeCarrierName(loads, newName) {
-  for (let eachLoad of loads){
-    let load = await getEntity(eachLoad["id"], LOAD).then((l) => { return l })
-    load[0]["carrier"]["name"] = newName
-    let key = datastore.key([LOAD, eachLoad["id"]]);
-    await datastore.save({"key": key, "data": load[0]});
+function editPatchError(req) {
+  const accepts = req.accepts(['application/json']);
+  if(req.get('content-type') !== 'application/json'){          
+    // Status 415 MIME type request not acceptable
+    return 415
+  } else if (!accepts) {                                       
+    // Status 406 MIME type response not acceptable
+    return 406
+  } else if (req.body.name == undefined && req.body.type == undefined && req.body.length == undefined ){
+    // 400 - at least 1 attribute needs to be changed
+    return 400
+  } else if (req.body.name != undefined && req.body.type != undefined && req.body.length != undefined ){
+    // 400 - can't change all 3 attributes at the same time
+    return 400
+  }
+  if (req.body.name != undefined) {
+    if (Object.keys(req.body.name).length > 20) { return 400 }
+    if (req.body.name == "") { return 400 }
+    if (typeof req.body.name != 'string') { return 400 }
+  }
+  if (req.body.type != undefined) {
+    if (Object.keys(req.body.type).length > 20) { return 400 }
+    if (req.body.length <= 0) { return 400 }
+    if (typeof req.body.type != 'string') { return 400 }
+  }
+  if (req.body.length != undefined) {
+    if (typeof req.body.length != 'number') { return 400 }
+    if (req.body.type == "") { return 400 }
+    if (req.body.length > 100000) { return 400 }
+  }
+  // 400 - when given extra irrelevent attribute
+  const attributes = Object.keys(req.body)
+  for (const a of attributes) {
+    if (a != 'name' && a != 'type' && a != 'length') {
+      return 400
+    }
   }
 };
 
@@ -212,14 +251,10 @@ async function removeLoadBoat(boat_id, load_id) {
 
 async function editBoatPUT(req) {
   const isError = catchBoatErr(req)
-  if (typeof isError == "number") {
-    return isError
-  }
+  if (typeof isError == "number") {return isError}
   // Check if boat exists
   let boat = await getEntity(req.params.boat_id, BOAT).then((e) => { return e })
-  if (boat[0] === undefined || boat[0] === null) {
-    return 404
-  }
+  if (boat[0] === undefined || boat[0] === null) {return 404}
   // Update new carrier name for all loads in the boat 
   changeCarrierName(boat[0]["loads"], req.body.name)
   // Edit boat 
@@ -227,6 +262,7 @@ async function editBoatPUT(req) {
   boat[0]["type"] = req.body.type
   boat[0]["length"] = req.body.length
   let key = datastore.key([BOAT, parseInt(req.params.boat_id, 10)]);
+  delete boat[0]["id"]
   await datastore.save({"key": key, "data": boat[0]});
   return boat[0]
 };
@@ -246,8 +282,25 @@ async function editLoadPUT(req) {
   load[0]["item"] = req.body.item
   load[0]["creationDate"] = req.body.creationDate
   let key = datastore.key([LOAD, parseInt(req.params.load_id, 10)]);
+  delete load[0]["id"]
   await datastore.save({"key": key, "data": load[0]});
   return load[0]
+};
+
+async function editBoatPATCH(req) {
+  const isError = editPatchError(req)
+  if (typeof isError == "number") {return isError}
+  // Check if boat exists
+  let boat = await getEntity(req.params.boat_id, BOAT).then((e) => { return e })
+  if (boat[0] === undefined || boat[0] === null) {return 404}
+  // Edit boat
+  if (req.body.name != undefined) { boat[0]["name"] = req.body.name };
+  if (req.body.type != undefined) { boat[0]["type"] = req.body.type };
+  if (req.body.length != undefined) { boat[0]["length"] = req.body.length };
+  let key = datastore.key([BOAT, parseInt(req.params.boat_id, 10)]);
+  delete boat[0]["id"]
+  await datastore.save({"key": key, "data": boat[0]});
+  return boat[0]
 };
 
 async function deleteBoat(boat_id) {
@@ -369,7 +422,7 @@ app.delete('/boats/:boat_id/loads/:load_id', (req, res) => {
     });
 });
 
-// Edits boat using put - all 3 attributes must be provided
+// Edit boat using PUT - all 3 attributes must be provided
 app.put('/boats/:boat_id', (req, res) => {
   editBoatPUT(req)
     .then((results) => {
@@ -383,7 +436,7 @@ app.put('/boats/:boat_id', (req, res) => {
     });
 });
 
-// Edits load using put - all 3 attributes must be provided
+// Edit load using PUT - all 3 attributes must be provided
 app.put('/loads/:load_id', (req, res) => {
   editLoadPUT(req)
     .then((results) => {
@@ -395,6 +448,20 @@ app.put('/loads/:load_id', (req, res) => {
         res.status(201).json(results);
       }
     });
+});
+
+// Edit boat using PATCH - at least 1 attribute must be provided
+app.patch('/boats/:boat_id', (req, res) => {
+  editBoatPATCH(req)
+    .then((results) => {
+      if (typeof results == "number") {
+        res.status(results).json(errorRes[results])
+      } else {
+        let self = req.protocol + "://" + req.get("host") + req.baseUrl + "/loads/" + results.id
+        results["self"] = self
+        res.status(200).json(results);
+      }
+    })
 });
 
 // Delete boat
