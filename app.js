@@ -38,7 +38,7 @@ async function getEntity(id, type) {
   });
 };
 
-function catchAddBoatErr(req) {
+function catchBoatErr(req) {
   const accepts = req.accepts(['application/json']);
   if(req.get('content-type') !== 'application/json'){          
     // Status 415 MIME type request not acceptable
@@ -64,7 +64,7 @@ function catchAddBoatErr(req) {
   } 
 };
 
-function catchAddLoadErr(req) {
+function catchLoadErr(req) {
   const accepts = req.accepts(['application/json']);
   if(req.get('content-type') !== 'application/json'){          
     // Status 415 MIME type request not acceptable
@@ -90,11 +90,20 @@ function catchAddLoadErr(req) {
   } 
 };
 
+async function changeCarrierName(loads, newName) {
+  for (let eachLoad of loads){
+    let load = await getEntity(eachLoad["id"], LOAD).then((l) => { return l })
+    load[0]["carrier"]["name"] = newName
+    let key = datastore.key([LOAD, eachLoad["id"]]);
+    await datastore.save({"key": key, "data": load[0]});
+  }
+};
+
 /* ------------- GENERAL FUNCTIONS (end) ------------- */
 
 /* ------------- MODEL FUNCTIONS (start) ------------- */
 async function addBoat(req) {
-  const isError = catchAddBoatErr(req)
+  const isError = catchBoatErr(req)
   if (isError != null ) {
     return isError
   } else {
@@ -107,7 +116,7 @@ async function addBoat(req) {
 };
 
 async function addLoad(req) {
-  const isError = catchAddLoadErr(req)
+  const isError = catchLoadErr(req)
   if (isError != null ) {
     return isError
   } else {
@@ -199,7 +208,28 @@ async function removeLoadBoat(boat_id, load_id) {
   let loadResults = await datastore.save({"key": keyLoad, "data": load[0]}).then(() => { return keyLoad })
   
   return (boatResults, loadResults)
-}
+};
+
+async function editBoatPUT(req) {
+  const isError = catchBoatErr(req)
+  if (typeof isError == "number") {
+    return isError
+  }
+  // Check if boat exists
+  let boat = await getEntity(req.params.boat_id, BOAT).then((b) => { return b })
+  if (boat[0] === undefined || boat[0] === null) {
+    return 404
+  }
+  // Update new carrier name for all loads in the boat 
+  changeCarrierName(boat[0]["loads"], req.body.name)
+  // Edit boat 
+  boat[0]["name"] = req.body.name
+  boat[0]["type"] = req.body.type
+  boat[0]["length"] = req.body.length
+  let key = datastore.key([BOAT, parseInt(req.params.boat_id, 10)]);
+  await datastore.save({"key": key, "data": boat[0]});
+  return boat[0]
+};
 
 async function deleteBoat(boat_id) {
   let boat = await getEntity(boat_id, BOAT).then((b) => {return b})
@@ -218,7 +248,7 @@ async function deleteBoat(boat_id) {
   // Delete boat
   let keyBoat = datastore.key([BOAT, parseInt(boat_id, 10)]);
   await datastore.delete(keyBoat);
-}
+};
 
 // async function deleteLoad(load_id) {
 //   let load = await getEntity(load_id, LOAD).then((b) => {return b})
@@ -231,7 +261,7 @@ async function deleteBoat(boat_id) {
 //   // Delete load
 //   let keyLoad = datastore.key([LOAD, parseInt(load_id, 10)]);
 //   await datastore.delete(keyLoad);
-// }
+// };
 
 /* ------------- MODEL FUNCTIONS (end) ------------- */
 
@@ -316,6 +346,20 @@ app.delete('/boats/:boat_id/loads/:load_id', (req, res) => {
         res.status(404).send('{"Error": "No boat with this boat_id is loaded with the load with this load_id"}');
       } else {
         res.status(204).end()
+      }
+    });
+});
+
+// Edits boat route using put - all 3 attributes must be provided
+app.put('/boats/:boat_id', (req, res) => {
+  editBoatPUT(req)
+    .then((results) => {
+      if (typeof results == "number") {
+        res.status(results).json(errorRes[results])
+      } else {
+        let self = req.protocol + "://" + req.get("host") + req.baseUrl + "/boats/" + results.id
+        results["self"] = self
+        res.status(201).json(results);
       }
     });
 });
