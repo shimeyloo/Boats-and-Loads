@@ -99,7 +99,7 @@ function catchLoadErr(req) {
   } 
 };
 
-function editPatchError(req) {
+function editPatchErrorBoat(req) {
   const accepts = req.accepts(['application/json']);
   if(req.get('content-type') !== 'application/json'){          
     // Status 415 MIME type request not acceptable
@@ -121,18 +121,57 @@ function editPatchError(req) {
   }
   if (req.body.type != undefined) {
     if (Object.keys(req.body.type).length > 20) { return 400 }
-    if (req.body.length <= 0) { return 400 }
+    if (req.body.type == "") { return 400 }
     if (typeof req.body.type != 'string') { return 400 }
   }
   if (req.body.length != undefined) {
     if (typeof req.body.length != 'number') { return 400 }
-    if (req.body.type == "") { return 400 }
+    if (req.body.length <= 0) { return 400 }
     if (req.body.length > 100000) { return 400 }
   }
   // 400 - when given extra irrelevent attribute
   const attributes = Object.keys(req.body)
   for (const a of attributes) {
     if (a != 'name' && a != 'type' && a != 'length') {
+      return 400
+    }
+  }
+};
+
+function editPatchErrorLoad(req) {
+  const accepts = req.accepts(['application/json']);
+  if(req.get('content-type') !== 'application/json'){          
+    // Status 415 MIME type request not acceptable
+    return 415
+  } else if (!accepts) {                                       
+    // Status 406 MIME type response not acceptable
+    return 406
+  } else if (req.body.volume == undefined && req.body.item == undefined && req.body.creationDate == undefined ){
+    // 400 - at least 1 attribute needs to be changed
+    return 400
+  } else if (req.body.volume != undefined && req.body.item != undefined && req.body.creationDate != undefined ){
+    // 400 - can't change all 3 attributes at the same time
+    return 400
+  }
+  if (req.body.item != undefined) {
+    if (Object.keys(req.body.item).length > 20) { return 400 }
+    if (req.body.item == "") { return 400 }
+    if (typeof req.body.item != 'string') { return 400 }
+  }
+  if (req.body.creationDate != undefined) {
+    if (Object.keys(req.body.creationDate).length > 20) { return 400 }
+    if (req.body.creationDate == "") { return 400 }
+    if (typeof req.body.creationDate != 'string') { return 400 }
+  }
+  if (req.body.volume != undefined) {
+    if (typeof req.body.volume != 'number') { return 400 }
+    if (req.body.volume <= 0) { return 400 }
+    if (req.body.volume > 100000) { return 400 }
+  }
+  // 400 - when given extra irrelevent attribute
+  const attributes = Object.keys(req.body)
+  for (const a of attributes) {
+    if (a != 'volume' && a != 'item' && a != 'creationDate') {
       return 400
     }
   }
@@ -264,6 +303,7 @@ async function editBoatPUT(req) {
   let key = datastore.key([BOAT, parseInt(req.params.boat_id, 10)]);
   delete boat[0]["id"]
   await datastore.save({"key": key, "data": boat[0]});
+  boat[0]["id"] = parseInt(req.params.boat_id, 10)
   return boat[0]
 };
 
@@ -284,11 +324,12 @@ async function editLoadPUT(req) {
   let key = datastore.key([LOAD, parseInt(req.params.load_id, 10)]);
   delete load[0]["id"]
   await datastore.save({"key": key, "data": load[0]});
+  load[0]["id"] = parseInt(req.params.load_id, 10)
   return load[0]
 };
 
 async function editBoatPATCH(req) {
-  const isError = editPatchError(req)
+  const isError = editPatchErrorBoat(req)
   if (typeof isError == "number") {return isError}
   // Check if boat exists
   let boat = await getEntity(req.params.boat_id, BOAT).then((e) => { return e })
@@ -303,11 +344,29 @@ async function editBoatPATCH(req) {
   let key = datastore.key([BOAT, parseInt(req.params.boat_id, 10)]);
   delete boat[0]["id"]
   await datastore.save({"key": key, "data": boat[0]});
+  boat[0]["id"] = parseInt(req.params.boat_id, 10)
   return boat[0]
 };
 
+async function editLoadPATCH(req) {
+  const isError = editPatchErrorLoad(req)
+  if (typeof isError == "number") {return isError}
+  // Check if load exists
+  let load = await getEntity(req.params.load_id, LOAD).then((e) => { return e })
+  if (load[0] === undefined || load[0] === null) {return 404}
+  // Edit load
+  if (req.body.volume != undefined) { load[0]["volume"] = req.body.volume };
+  if (req.body.item != undefined) { load[0]["item"] = req.body.item };
+  if (req.body.creationDate != undefined) { load[0]["creationDate"] = req.body.creationDate };
+  let key = datastore.key([LOAD, parseInt(req.params.load_id, 10)]);
+  delete load[0]["id"]
+  await datastore.save({"key": key, "data": load[0]});
+  load[0]["id"] = parseInt(req.params.load_id, 10)
+  return load[0]
+};
+
 async function deleteBoat(boat_id) {
-  let boat = await getEntity(boat_id, BOAT).then((b) => {return b})
+  let boat = await getEntity(boat_id, BOAT).then((e) => {return e})
   // Check if boat exist
   if (boat[0] === undefined || boat[0] === null ) {
     return 404
@@ -315,7 +374,7 @@ async function deleteBoat(boat_id) {
   // Remove boat from loads
   let allLoads = boat[0].loads
   for (const eachLoad of allLoads) {
-    let load = await getLoad(eachLoad.id).then((l) => {return l});
+    let load = await getEntity(eachLoad.id, LOAD).then((e) => {return e});
     load[0].carrier = null 
     let keyLoad = datastore.key([LOAD, parseInt(eachLoad.id, 10)]);
     await datastore.save({"key": keyLoad, "data": load[0]})
@@ -325,18 +384,23 @@ async function deleteBoat(boat_id) {
   await datastore.delete(keyBoat);
 };
 
-// async function deleteLoad(load_id) {
-//   let load = await getEntity(load_id, LOAD).then((b) => {return b})
-//   // Check if load exist
-//   if (load[0] === undefined || load[0] === null ) {
-//     return 404
-//   } 
-//   // Remove load from boat
-//   console.log(load)
-//   // Delete load
-//   let keyLoad = datastore.key([LOAD, parseInt(load_id, 10)]);
-//   await datastore.delete(keyLoad);
-// };
+async function deleteLoad(load_id) {
+  let load = await getEntity(load_id, LOAD).then((e) => {return e})
+  // Check if load exist
+  if (load[0] === undefined || load[0] === null ) {
+    return 404
+  } 
+  // Remove load from boat
+  carrierID = load[0]["carrier"]["id"]
+  let boat = await getEntity(carrierID, BOAT).then((e) => {return e})
+  let removedLoad = boat[0]["loads"].filter(l => l.id != load_id)
+  boat[0]["loads"] = removedLoad
+  let keyBoat = datastore.key([BOAT, carrierID]);
+  await datastore.save({"key": keyBoat, "data": boat[0]})
+  // Delete load
+  let keyLoad = datastore.key([LOAD, parseInt(load_id, 10)]);
+  await datastore.delete(keyLoad);
+};
 
 /* ------------- MODEL FUNCTIONS (end) ------------- */
 
@@ -402,6 +466,13 @@ app.get('/boats/:boat_id', (req, res) => {
       if (typeof results == "number") {
         res.status(results).json(errorRes[results])
       } else {
+        // Add self to all loads
+        for (let i = 0; i < results[0]["loads"].length; i++) {
+          let loadID = results[0]["loads"][i]["id"]
+          let selfLoad = req.protocol + "://" + req.get("host") + req.baseUrl + "/loads/" + loadID
+          results[0]["loads"][i]["self"] = selfLoad
+        }
+        // Add self
         let self = req.protocol + "://" + req.get("host") + req.baseUrl + "/boats/" + req.params.boat_id
         results[0]["self"] = self
         results[0]["id"] = parseInt(results[0]["id"])
@@ -417,6 +488,12 @@ app.get('/loads/:load_id', (req, res) => {
       if (typeof results == "number") {
         res.status(results).json(errorRes[results])
       } else {
+        // Add self to carrier 
+        if (results[0]["carrier"] != null) {
+          let selfCarrier = req.protocol + "://" + req.get("host") + req.baseUrl + "/boats/" + results[0]["carrier"]["id"]
+          results[0]["carrier"]["self"] = selfCarrier
+        }
+        // Add self
         let self = req.protocol + "://" + req.get("host") + req.baseUrl + "/loads/" + req.params.load_id
         results[0]["self"] = self
         results[0]["id"] = parseInt(results[0]["id"])
@@ -458,6 +535,13 @@ app.put('/boats/:boat_id', (req, res) => {
       if (typeof results == "number") {
         res.status(results).json(errorRes[results])
       } else {
+        // Add self to all loads
+        for (let i = 0; i < results["loads"].length; i++) {
+          let loadID = results["loads"][i]["id"]
+          let selfLoad = req.protocol + "://" + req.get("host") + req.baseUrl + "/loads/" + loadID
+          results["loads"][i]["self"] = selfLoad
+        }
+        // Add self
         let self = req.protocol + "://" + req.get("host") + req.baseUrl + "/boats/" + results.id
         results["self"] = self
         res.status(201).json(results);
@@ -472,6 +556,12 @@ app.put('/loads/:load_id', (req, res) => {
       if (typeof results == "number") {
         res.status(results).json(errorRes[results])
       } else {
+        // Add self to carrier 
+        if (results["carrier"] != null) {
+          let selfCarrier = req.protocol + "://" + req.get("host") + req.baseUrl + "/boats/" + results["carrier"]["id"]
+          results["carrier"]["self"] = selfCarrier
+        }
+        // Add self
         let self = req.protocol + "://" + req.get("host") + req.baseUrl + "/loads/" + results.id
         results["self"] = self
         res.status(201).json(results);
@@ -486,6 +576,33 @@ app.patch('/boats/:boat_id', (req, res) => {
       if (typeof results == "number") {
         res.status(results).json(errorRes[results])
       } else {
+        // Add self to all loads
+        for (let i = 0; i < results["loads"].length; i++) {
+          let loadID = results["loads"][i]["id"]
+          let selfLoad = req.protocol + "://" + req.get("host") + req.baseUrl + "/loads/" + loadID
+          results["loads"][i]["self"] = selfLoad
+        }
+        // Add self
+        let self = req.protocol + "://" + req.get("host") + req.baseUrl + "/boats/" + results.id
+        results["self"] = self
+        res.status(200).json(results);
+      }
+    })
+});
+
+// Edit load using PATCH - at least 1 attribute must be provided
+app.patch('/loads/:load_id', (req, res) => {
+  editLoadPATCH(req)
+    .then((results) => {
+      if (typeof results == "number") {
+        res.status(results).json(errorRes[results])
+      } else {
+        // Add self to carrier 
+        if (results["carrier"] != null) {
+          let selfCarrier = req.protocol + "://" + req.get("host") + req.baseUrl + "/boats/" + results["carrier"]["id"]
+          results["carrier"]["self"] = selfCarrier
+        }
+        // Add self
         let self = req.protocol + "://" + req.get("host") + req.baseUrl + "/loads/" + results.id
         results["self"] = self
         res.status(200).json(results);
@@ -505,17 +622,17 @@ app.delete('/boats/:boat_id', (req, res) => {
     });
 });
 
-// // Delete load
-// app.delete('/loads/:load_id', (req, res) => {
-//   deleteLoad(req.params.load_id)
-//     .then((key) => {
-//       if (key == 404) {
-//         res.status(404).send('{"Error": "No load with this load_id exists"}');
-//       } else {
-//         res.status(204).end()
-//       }
-//     });
-// });
+// Delete load
+app.delete('/loads/:load_id', (req, res) => {
+  deleteLoad(req.params.load_id)
+    .then((key) => {
+      if (key == 404) {
+        res.status(404).send('{"Error": "No load with this load_id exists"}');
+      } else {
+        res.status(204).end()
+      }
+    });
+});
 
 
 
