@@ -64,6 +64,19 @@ async function getEntitiesTotal(type) {
   return allEntities.length
 };
 
+function parseJwt (token) {
+  return JSON.parse(Buffer.from(token.split('.')[1], 'base64').toString());
+};
+
+async function uniqueUserID(id) {
+  const q = datastore.createQuery(USER); 
+  let allUsers = await datastore.runQuery(q).then((entity) => {return entity[0].map(fromDatastore)});
+  for (const b of allUsers) {
+    if (b.uniqueID == id) { return false }
+  }
+  return true
+};
+
 function catchBoatErr(req) {
   const accepts = req.accepts(['application/json']);
   if(req.get('content-type') !== 'application/json'){          
@@ -194,13 +207,20 @@ function editPatchErrorLoad(req) {
   }
 };
 
-function parseJwt (token) {
-  return JSON.parse(Buffer.from(token.split('.')[1], 'base64').toString());
-}
-
 /* ------------- GENERAL FUNCTIONS (end) ------------- */
 
-/* ------------- NON-USER MODEL FUNCTIONS (start) ------------- */
+/* ------------- MODEL FUNCTIONS (start) ------------- */
+async function addUser(id) {
+  let isUnique = await uniqueUserID(id)
+  if (isUnique) {
+    var key = datastore.key(USER);
+    let newEntity = { "uniqueID": id, "loads":[] };
+    let results = await datastore.save({ "key": key, "data": newEntity }).then(() => { return key });
+    newEntity["id"] = parseInt(results.id)
+    return newEntity
+  }
+};
+
 async function addBoat(req) {
   const isError = catchBoatErr(req)
   if (isError != null ) {
@@ -270,7 +290,7 @@ async function getAllBoats(req) {
           results.totalBoats = boatsTotal;
     return results;
   });
-}
+};
 
 async function loadBoat(boat_id, load_id) {
   let boat = await getEntity(boat_id, BOAT)
@@ -443,9 +463,9 @@ async function deleteLoad(load_id) {
   await datastore.delete(keyLoad);
 };
 
-/* ------------- NON-USER MODEL FUNCTIONS (end) ------------- */
+/* ------------- MODEL FUNCTIONS (end) ------------- */
 
-/* ------------- NON-USER CONTROLLER FUNCTIONS NON-USER (start) ------------- */
+/* ------------- CONTROLLER FUNCTIONS NON-USER (start) ------------- */
 
 // Not allowed - Status 405
 app.put('/boats', (req, res) => {
@@ -681,9 +701,9 @@ app.delete('/loads/:load_id', (req, res) => {
     });
 });
 
-/* ------------- NON-USER CONTROLLER FUNCTIONS ENTITIES (end) ------------- */
+/* ------------- CONTROLLER FUNCTIONS ENTITIES (end) ------------- */
 
-/* ------------- USER CONTROLLER FUNCTIONS (start) ------------- */
+/* ------------- OAUTH FUNCTIONS (start) ------------- */
 
 app.set('view engine', 'hbs');
 
@@ -715,7 +735,7 @@ app.get('/oauth', (req, res) => {
       res.status(500).send(error);
     } else {
       let parsed_jwt = parseJwt(body.id_token)
-      
+      addUser(parsed_jwt.sub)
       res.render('user-info', {
         layout: 'index', 
         jwt: body.id_token,
@@ -725,8 +745,7 @@ app.get('/oauth', (req, res) => {
   });
 });
 
-/* ------------- USER CONTROLLER FUNCTIONS (end) ------------- */
-
+/* ------------- OAUTH FUNCTIONS (end) ------------- */
 
 // Listen to the App 
 const PORT = process.env.PORT || 8080;
