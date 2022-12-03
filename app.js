@@ -8,11 +8,17 @@ const { entity } = require('@google-cloud/datastore/build/src/entity');
 const bodyParser = require('body-parser');
 app.use(bodyParser.json());
 
+const handlebars = require('express-handlebars');
+
 app.enable('trust proxy');
 
 const USER = 'User'; 
 const BOAT = 'Boat';
 const LOAD = 'Load'; 
+
+const CLIENT_ID = '4aX5xB4pKX5grZ22br5Z0MQVqlCt9TvL';
+const CLIENT_SECRET = 'IS_ZBh4vcCu45pz0wuLj38h9rEYmOOR2DL6gRBT-3MERqJi1nD2OfCZ4PkSarWhT';
+const DOMAIN = 'boats-and-loads.us.auth0.com';
 
 var errorRes = {
   400: {"Error": "At least one attribute is missing and/or invalid"}, 
@@ -252,7 +258,7 @@ async function getAllBoats(req) {
           if(entities[1].moreResults !== Datastore.NO_MORE_RESULTS ){
               results.next = req.protocol + "://" + req.get("host") + req.baseUrl + "/boats?cursor=" + entities[1].endCursor;
           }
-          results.total_boats = boatsTotal;
+          results.totalBoats = boatsTotal;
     return results;
   });
 }
@@ -430,7 +436,7 @@ async function deleteLoad(load_id) {
 
 /* ------------- MODEL FUNCTIONS (end) ------------- */
 
-/* ------------- CONTROLLER FUNCTIONS (start) ------------- */
+/* ------------- CONTROLLER FUNCTIONS NON-USER ENTITIES (start) ------------- */
 // Not allowed - Status 405
 app.put('/boats', (req, res) => {
   res.set('Accept', 'GET')
@@ -665,7 +671,24 @@ app.delete('/loads/:load_id', (req, res) => {
     });
 });
 
-/* ------------- CONTROLLER FUNCTIONS (end) ------------- */
+/* ------------- CONTROLLER FUNCTIONS NON-USER ENTITIES (end) ------------- */
+
+/* ------------- CONTROLLER FUNCTIONS USER (start) ------------- */
+
+app.set('view engine', 'hbs');
+
+app.engine('hbs', handlebars.engine({
+  defaultLayout: 'index',
+  extname: 'hbs',
+}));
+
+app.get('/', (req, res) => {
+  // Render welcome page, and include state in OAuth link
+  res.render('welcome', {layout: 'index'});
+});
+
+/* ------------- CONTROLLER FUNCTIONS USER (end) ------------- */
+
 
 // Listen to the App 
 const PORT = process.env.PORT || 8080;
