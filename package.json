@@ -19,6 +19,7 @@
   "homepage": "https://github.com/shimeyloo/Boats-and-Loads#readme",
   "dependencies": {
     "@google-cloud/datastore": "^7.0.0",
+    "axios": "^1.1.3",
     "bootstrap": "^5.2.3",
     "express": "^4.18.2",
     "express-handlebars": "^6.0.6"

@@ -19,6 +19,7 @@ const LOAD = 'Load';
 const CLIENT_ID = '4aX5xB4pKX5grZ22br5Z0MQVqlCt9TvL';
 const CLIENT_SECRET = 'IS_ZBh4vcCu45pz0wuLj38h9rEYmOOR2DL6gRBT-3MERqJi1nD2OfCZ4PkSarWhT';
 const DOMAIN = 'boats-and-loads.us.auth0.com';
+const REDIRECT_URI = 'http://localhost:8080/oauth'
 
 var errorRes = {
   400: {"Error": "At least one attribute is missing and/or invalid"}, 
@@ -683,8 +684,35 @@ app.engine('hbs', handlebars.engine({
 }));
 
 app.get('/', (req, res) => {
-  // Render welcome page, and include state in OAuth link
-  res.render('welcome', {layout: 'index'});
+  // Render welcome page
+  res.render('welcome', {
+    layout: 'index', 
+    link: `https://${DOMAIN}/authorize?response_type=code&client_id=${CLIENT_ID}&redirect_uri=${REDIRECT_URI}`});
+});
+
+app.get('/oauth', (req, res) => {
+  console.log(req.query)
+  // axios.post('https://oauth2.googleapis.com/token', {
+  //   code: req.query.code,
+  //   client_id: CLIENT_ID,
+  //   client_secret: CLIENT_SECRET,
+  //   redirect_uri: REDIRECT_URI,
+  //   grant_type: 'authorization_code'
+  // })
+  // .then(function (response) {
+  //   // console.log(response.data.id_token)
+  //   axios.get('https://people.googleapis.com/v1/people/me?personFields=names&access_token='+response.data.access_token)
+  //     .then((response) => {
+  //       res.render('user-info', {
+  //         layout: 'index', 
+  //         firstName: response.data.id_token
+  //         // lastName: response.data.names[0].familyName,
+  //       });
+  //     })
+  // })
+  // .catch(function (error) {
+  //   console.log(error);
+  // });
 });
 
 /* ------------- CONTROLLER FUNCTIONS USER (end) ------------- */
