@@ -23,7 +23,7 @@ const CLIENT_ID = '4aX5xB4pKX5grZ22br5Z0MQVqlCt9TvL';
 const CLIENT_SECRET = 'IS_ZBh4vcCu45pz0wuLj38h9rEYmOOR2DL6gRBT-3MERqJi1nD2OfCZ4PkSarWhT';
 const DOMAIN = 'boats-and-loads.us.auth0.com';
 const REDIRECT_URI = 'http://localhost:8080/oauth'
-const SCOPE = 'openid email profile'
+const SCOPE = 'openid%20name%20picture'
 
 var errorRes = {
   400: {"Error": "At least one attribute is missing and/or invalid"}, 
@@ -194,9 +194,13 @@ function editPatchErrorLoad(req) {
   }
 };
 
+function parseJwt (token) {
+  return JSON.parse(Buffer.from(token.split('.')[1], 'base64').toString());
+}
+
 /* ------------- GENERAL FUNCTIONS (end) ------------- */
 
-/* ------------- MODEL FUNCTIONS (start) ------------- */
+/* ------------- NON-USER MODEL FUNCTIONS (start) ------------- */
 async function addBoat(req) {
   const isError = catchBoatErr(req)
   if (isError != null ) {
@@ -439,9 +443,9 @@ async function deleteLoad(load_id) {
   await datastore.delete(keyLoad);
 };
 
-/* ------------- MODEL FUNCTIONS (end) ------------- */
+/* ------------- NON-USER MODEL FUNCTIONS (end) ------------- */
 
-/* ------------- CONTROLLER FUNCTIONS NON-USER ENTITIES (start) ------------- */
+/* ------------- NON-USER CONTROLLER FUNCTIONS NON-USER (start) ------------- */
 
 // Not allowed - Status 405
 app.put('/boats', (req, res) => {
@@ -677,9 +681,9 @@ app.delete('/loads/:load_id', (req, res) => {
     });
 });
 
-/* ------------- CONTROLLER FUNCTIONS NON-USER ENTITIES (end) ------------- */
+/* ------------- NON-USER CONTROLLER FUNCTIONS ENTITIES (end) ------------- */
 
-/* ------------- CONTROLLER FUNCTIONS USER (start) ------------- */
+/* ------------- USER CONTROLLER FUNCTIONS (start) ------------- */
 
 app.set('view engine', 'hbs');
 
@@ -700,22 +704,28 @@ app.get('/oauth', (req, res) => {
     url: `https://${DOMAIN}/oauth/token`,
     headers: { 'content-type': 'application/json' },
     body:
-      { grant_type: 'authorization_code',
-        code: req.query.code,
-        redirect_uri: 'http://localhost:8080/user-info',
-        client_id: CLIENT_ID,
-        client_secret: CLIENT_SECRET },
+    { grant_type: 'authorization_code',
+      code: req.query.code,
+      redirect_uri: REDIRECT_URI,
+      client_id: CLIENT_ID,
+      client_secret: CLIENT_SECRET },
     json: true };
   request(options, (error, response, body) => {
     if (error){
       res.status(500).send(error);
     } else {
-      res.send(body);
+      let parsed_jwt = parseJwt(body.id_token)
+      
+      res.render('user-info', {
+        layout: 'index', 
+        jwt: body.id_token,
+        sub: parsed_jwt.sub
+      });
     }
   });
 });
 
-/* ------------- CONTROLLER FUNCTIONS USER (end) ------------- */
+/* ------------- USER CONTROLLER FUNCTIONS (end) ------------- */
 
 
 // Listen to the App 
