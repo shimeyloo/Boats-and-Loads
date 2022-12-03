@@ -11,8 +11,6 @@ const request = require('request');
 
 const handlebars = require('express-handlebars');
 
-const axios = require('axios');
-
 app.enable('trust proxy');
 
 const USER = 'User'; 
