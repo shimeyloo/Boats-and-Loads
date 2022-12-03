@@ -7,8 +7,11 @@ const { entity } = require('@google-cloud/datastore/build/src/entity');
 
 const bodyParser = require('body-parser');
 app.use(bodyParser.json());
+const request = require('request');
 
 const handlebars = require('express-handlebars');
+
+const axios = require('axios');
 
 app.enable('trust proxy');
 
@@ -20,6 +23,7 @@ const CLIENT_ID = '4aX5xB4pKX5grZ22br5Z0MQVqlCt9TvL';
 const CLIENT_SECRET = 'IS_ZBh4vcCu45pz0wuLj38h9rEYmOOR2DL6gRBT-3MERqJi1nD2OfCZ4PkSarWhT';
 const DOMAIN = 'boats-and-loads.us.auth0.com';
 const REDIRECT_URI = 'http://localhost:8080/oauth'
+const SCOPE = 'openid email profile'
 
 var errorRes = {
   400: {"Error": "At least one attribute is missing and/or invalid"}, 
@@ -438,6 +442,7 @@ async function deleteLoad(load_id) {
 /* ------------- MODEL FUNCTIONS (end) ------------- */
 
 /* ------------- CONTROLLER FUNCTIONS NON-USER ENTITIES (start) ------------- */
+
 // Not allowed - Status 405
 app.put('/boats', (req, res) => {
   res.set('Accept', 'GET')
@@ -687,32 +692,27 @@ app.get('/', (req, res) => {
   // Render welcome page
   res.render('welcome', {
     layout: 'index', 
-    link: `https://${DOMAIN}/authorize?response_type=code&client_id=${CLIENT_ID}&redirect_uri=${REDIRECT_URI}`});
+    link: `https://${DOMAIN}/authorize?response_type=code&client_id=${CLIENT_ID}&redirect_uri=${REDIRECT_URI}&scope=${SCOPE}&response_mode=query`});
 });
 
 app.get('/oauth', (req, res) => {
-  console.log(req.query)
-  // axios.post('https://oauth2.googleapis.com/token', {
-  //   code: req.query.code,
-  //   client_id: CLIENT_ID,
-  //   client_secret: CLIENT_SECRET,
-  //   redirect_uri: REDIRECT_URI,
-  //   grant_type: 'authorization_code'
-  // })
-  // .then(function (response) {
-  //   // console.log(response.data.id_token)
-  //   axios.get('https://people.googleapis.com/v1/people/me?personFields=names&access_token='+response.data.access_token)
-  //     .then((response) => {
-  //       res.render('user-info', {
-  //         layout: 'index', 
-  //         firstName: response.data.id_token
-  //         // lastName: response.data.names[0].familyName,
-  //       });
-  //     })
-  // })
-  // .catch(function (error) {
-  //   console.log(error);
-  // });
+  var options = { method: 'POST',
+    url: `https://${DOMAIN}/oauth/token`,
+    headers: { 'content-type': 'application/json' },
+    body:
+      { grant_type: 'authorization_code',
+        code: req.query.code,
+        redirect_uri: 'http://localhost:8080/user-info',
+        client_id: CLIENT_ID,
+        client_secret: CLIENT_SECRET },
+    json: true };
+  request(options, (error, response, body) => {
+    if (error){
+      res.status(500).send(error);
+    } else {
+      res.send(body);
+    }
+  });
 });
 
 /* ------------- CONTROLLER FUNCTIONS USER (end) ------------- */
