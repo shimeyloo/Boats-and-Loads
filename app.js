@@ -284,6 +284,13 @@ async function getLoad(req) {
   return load[0]
 };
 
+async function getAllUsers() {
+  const q = datastore.createQuery(USER); 
+  return datastore.runQuery(q).then((entity) => {
+    return entity[0].map(fromDatastore);
+  });
+};
+
 async function getAllBoats(req) {
   var q = datastore.createQuery(BOAT).limit(5);
   const results = {};
@@ -454,12 +461,12 @@ async function deleteBoat(boat_id) {
   await datastore.delete(keyBoat);
 };
 
-async function deleteLoad(load_id) {
+async function deleteLoad(load_id, req) {
   let load = await getEntity(load_id, LOAD).then((e) => {return e})
   // Check if load exist
-  if (load[0] === undefined || load[0] === null ) {
-    return 404
-  } 
+  if (load[0] === undefined || load[0] === null ) { return 404 } 
+  // Check for corrent owner
+  if (load[0].owner != req.auth.sub){ return 401 }
   // Remove load from boat
   if (load[0]["carrier"] != null) {
     carrierID = load[0]["carrier"]["id"]
@@ -573,6 +580,14 @@ app.get('/loads/:load_id', checkJwt, (req, res) => {
         results["id"] = parseInt(results["id"])
         res.status(200).json(results);
       }
+    });
+});
+
+// Get all users
+app.get('/users', (req, res) => {
+  getAllUsers()
+    .then((entities) => {
+      res.status(200).json(entities)
     });
 });
 
@@ -703,7 +718,7 @@ app.delete('/boats/:boat_id', (req, res) => {
 
 // Delete load
 app.delete('/loads/:load_id', checkJwt, (req, res) => {
-  deleteLoad(req.params.load_id)
+  deleteLoad(req.params.load_id, req)
     .then((key) => {
       if (key == 404) {
         res.status(404).json({"Error": "No load with this load_id exists"});
