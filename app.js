@@ -23,8 +23,8 @@ const LOAD = 'Load';
 const CLIENT_ID = '4aX5xB4pKX5grZ22br5Z0MQVqlCt9TvL';
 const CLIENT_SECRET = 'IS_ZBh4vcCu45pz0wuLj38h9rEYmOOR2DL6gRBT-3MERqJi1nD2OfCZ4PkSarWhT';
 const DOMAIN = 'boats-and-loads.us.auth0.com';
-const REDIRECT_URI = 'http://localhost:8080/oauth'
-const SCOPE = 'openid%20name%20picture'
+const REDIRECT_URI = 'https://boats-and-loads-370115.wl.r.appspot.com/oauth'
+const SCOPE = 'openid email profile'
 
 var errorRes = {
   400: {"Error": "At least one attribute is missing and/or invalid"}, 
@@ -802,7 +802,7 @@ app.engine('hbs', handlebars.engine({
   extname: 'hbs',
 }));
 
-app.get('/', (req, res) => {
+app.get('/login', (req, res) => {
   // Render welcome page
   res.render('welcome', {
     layout: 'index', 
