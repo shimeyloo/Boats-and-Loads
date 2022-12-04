@@ -235,7 +235,7 @@ async function addUser(id) {
   let isUnique = await uniqueUserID(id)
   if (isUnique) {
     var key = datastore.key(USER);
-    let newEntity = { "uniqueID": id, "loads":[] };
+    let newEntity = { "uniqueID": id };
     let results = await datastore.save({ "key": key, "data": newEntity }).then(() => { return key });
     newEntity["id"] = parseInt(results.id)
     return newEntity
@@ -611,18 +611,43 @@ app.get('/loads/:load_id', checkJwt, (req, res) => {
 app.get('/users', (req, res) => {
   getAllUsers()
     .then((entities) => {
+      for (let i = 0; i < entities.length; i++) {
+        entities[i]["self"] = req.protocol + "://" + req.get("host") + req.baseUrl + "/users/" + entities[i]["id"]
+      }
       res.status(200).json(entities)
     });
 });
 
 // Get all boats with pagination
 app.get('/boats', (req, res) => {
-  getAllBoats(req).then((results) => {res.status(200).json( results )});
+  getAllBoats(req)
+    .then((results) => {
+      for (let i = 0; i < results["boats"].length; i++) {
+        // Add self to all loads in the boat
+        for (let j = 0; j < results["boats"][i]["loads"].length; j++) {
+          results["boats"][i]["loads"][j]["self"] = req.protocol + "://" + req.get("host") + req.baseUrl + "/loads/" + results["boats"][i]["loads"][j]["id"]
+        };
+        // Add self to all boats
+        results["boats"][i]["self"] = req.protocol + "://" + req.get("host") + req.baseUrl + "/boats/" + results["boats"][i]["id"]
+      };
+      res.status(200).json( results )
+    });
 });
 
 // Get all loads with pagination
 app.get('/loads', checkJwt, (req, res) => {
-  getAllLoads(req).then((results) => {res.status(200).json( results )});
+  getAllLoads(req)
+    .then((results) => {
+      for (let i = 0; i < results["loads"].length; i++) {
+        // Add self to all carriers in the load
+        if (results["loads"][i]["carrier"] != null) {
+          results["loads"][i]["carrier"]["self"] = req.protocol + "://" + req.get("host") + req.baseUrl + "/boats/" + results["loads"][i]["carrier"]["id"]
+        }
+        // Add self to all loads
+        results["loads"][i]["self"] = req.protocol + "://" + req.get("host") + req.baseUrl + "/boats/" + results["loads"][i]["id"]
+      }
+      res.status(200).json( results )
+    });
 });
 
 // Assign load to boat
