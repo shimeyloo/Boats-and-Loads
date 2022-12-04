@@ -11,6 +11,9 @@ const request = require('request');
 
 const handlebars = require('express-handlebars');
 
+const { expressjwt: jwt } = require("express-jwt");
+const jwksRsa = require('jwks-rsa');
+
 app.enable('trust proxy');
 
 const USER = 'User'; 
@@ -25,10 +28,23 @@ const SCOPE = 'openid%20name%20picture'
 
 var errorRes = {
   400: {"Error": "At least one attribute is missing and/or invalid"}, 
+  401: {"Error": "Missing or invalid JWT"},
   404: {"Error": "No entity with this id exists"},
   406: {"Error": "MIME type not acceptable, response must be JSON"},
   415: {"Error": "MIME type not acceptable, request must be JSON"}
 };
+
+const checkJwt = jwt({
+  secret: jwksRsa.expressJwtSecret({
+    cache: true,
+    rateLimit: true,
+    jwksRequestsPerMinute: 5,
+    jwksUri: `https://${DOMAIN}/.well-known/jwks.json`
+  }),
+  // Validate the audience and the issuer.
+  issuer: `https://${DOMAIN}/`,
+  algorithms: ['RS256']
+});
 
 /* ------------- GENERAL FUNCTIONS (start) ------------- */
 function fromDatastore(item) {
@@ -238,7 +254,13 @@ async function addLoad(req) {
     return isError
   } else {
     var key = datastore.key(LOAD);
-    let newLoad = { "volume": req.body.volume, "item": req.body.item, "creationDate": req.body.creationDate, "carrier": null };
+    let newLoad = { 
+      "volume": req.body.volume, 
+      "item": req.body.item, 
+      "creationDate": req.body.creationDate, 
+      "carrier": null,
+      "owner": req.auth.sub 
+    };
     let results = await datastore.save({ "key": key, "data": newLoad }).then(() => { return key });
     newLoad["id"] = parseInt(results.id)
     return newLoad
@@ -270,7 +292,11 @@ async function getLoad(req) {
     // Status 404 No load with given id found 
     return 404
   }
-  return load
+  if (load[0].owner != req.auth.sub){
+    // Status 401 for unauthorized owner
+    return 401
+  }
+  return load[0]
 };
 
 async function getAllBoats(req) {
@@ -506,7 +532,7 @@ app.post('/boats', (req, res) => {
 });
 
 // Add load
-app.post('/loads', (req, res) => {
+app.post('/loads', checkJwt, (req, res) => {
   addLoad(req)
     .then(results => { 
       if (typeof results == "number") {
@@ -542,22 +568,22 @@ app.get('/boats/:boat_id', (req, res) => {
 });
 
 // Gets load
-app.get('/loads/:load_id', (req, res) => {  
+app.get('/loads/:load_id', checkJwt, (req, res) => {  
   getLoad(req)
     .then(results => {
       if (typeof results == "number") {
         res.status(results).json(errorRes[results])
       } else {
         // Add self to carrier 
-        if (results[0]["carrier"] != null) {
-          let selfCarrier = req.protocol + "://" + req.get("host") + req.baseUrl + "/boats/" + results[0]["carrier"]["id"]
-          results[0]["carrier"]["self"] = selfCarrier
+        if (results["carrier"] != null) {
+          let selfCarrier = req.protocol + "://" + req.get("host") + req.baseUrl + "/boats/" + results["carrier"]["id"]
+          results["carrier"]["self"] = selfCarrier
         }
         // Add self
         let self = req.protocol + "://" + req.get("host") + req.baseUrl + "/loads/" + req.params.load_id
-        results[0]["self"] = self
-        results[0]["id"] = parseInt(results[0]["id"])
-        res.status(200).json(results[0]);
+        results["self"] = self
+        results["id"] = parseInt(results["id"])
+        res.status(200).json(results);
       }
     });
 });
@@ -697,6 +723,13 @@ app.delete('/loads/:load_id', (req, res) => {
         res.status(204).end()
       }
     });
+});
+
+// Catch invalid JWT
+app.use( (err, req, res, next) => {
+  if (err.status == 401) {
+    res.status(401).json(errorRes[err.status])
+  }
 });
 
 /* ------------- CONTROLLER FUNCTIONS ENTITIES (end) ------------- */
