@@ -78,6 +78,13 @@ async function getEntitiesTotal(type) {
   return allEntities.length
 };
 
+async function getAuthTotal(type, sub) {
+  const q = datastore.createQuery(type); 
+  let allEntities = await datastore.runQuery(q).then((entity) => {return entity[0].map(fromDatastore)});
+  let authEntities = allEntities.filter(e => e.owner == sub)
+  return authEntities.length
+};
+
 function parseJwt (token) {
   return JSON.parse(Buffer.from(token.split('.')[1], 'base64').toString());
 };
@@ -303,7 +310,24 @@ async function getAllBoats(req) {
           if(entities[1].moreResults !== Datastore.NO_MORE_RESULTS ){
               results.next = req.protocol + "://" + req.get("host") + req.baseUrl + "/boats?cursor=" + entities[1].endCursor;
           }
-          results.totalBoats = boatsTotal;
+          results.totalLoads = boatsTotal;
+    return results;
+  });
+};
+
+async function getAllLoads(req) {
+  var q = datastore.createQuery(LOAD).filter('owner', '=', req.auth.sub).limit(5);
+  const results = {};
+  if(Object.keys(req.query).includes("cursor")){
+      q = q.start(req.query.cursor);
+  }
+  let loadsTotal = await getAuthTotal(LOAD, req.auth.sub)
+  return datastore.runQuery(q).then( (entities) => {
+          results.loads = entities[0].map(fromDatastore);
+          if(entities[1].moreResults !== Datastore.NO_MORE_RESULTS ){
+              results.next = req.protocol + "://" + req.get("host") + req.baseUrl + "/loads?cursor=" + entities[1].endCursor;
+          }
+          results.totalLoads = loadsTotal;
     return results;
   });
 };
@@ -594,6 +618,11 @@ app.get('/users', (req, res) => {
 // Get all boats with pagination
 app.get('/boats', (req, res) => {
   getAllBoats(req).then((results) => {res.status(200).json( results )});
+});
+
+// Get all loads with pagination
+app.get('/loads', checkJwt, (req, res) => {
+  getAllLoads(req).then((results) => {res.status(200).json( results )});
 });
 
 // Assign load to boat
