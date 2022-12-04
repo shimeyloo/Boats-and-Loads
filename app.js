@@ -269,33 +269,18 @@ async function addLoad(req) {
 
 async function getBoat(req) {
   const accepts = req.accepts(['application/json'])
-  if (!accepts) {                                       
-    // Status 406 MIME type response not acceptable
-    return 406
-  } 
+  if (!accepts) { return 406 } 
   let boat = await getEntity(req.params.boat_id, BOAT)
-  if (boat[0] === undefined || boat[0] === null) {
-    // Status 404 No boat with given id found 
-    return 404
-  }
+  if (boat[0] === undefined || boat[0] === null) { return 404 }
   return boat
 };
 
 async function getLoad(req) {
   const accepts = req.accepts(['application/json'])
-  if (!accepts) {                                       
-    // Status 406 MIME type response not acceptable
-    return 406
-  } 
+  if (!accepts) { return 406 } 
   let load = await getEntity(req.params.load_id, LOAD)
-  if (load[0] === undefined || load[0] === null) {
-    // Status 404 No load with given id found 
-    return 404
-  }
-  if (load[0].owner != req.auth.sub){
-    // Status 401 for unauthorized owner
-    return 401
-  }
+  if (load[0] === undefined || load[0] === null) { return 404 }
+  if (load[0].owner != req.auth.sub){ return 401 }
   return load[0]
 };
 
@@ -396,9 +381,9 @@ async function editLoadPUT(req) {
   }
   // Check if load exists
   let load = await getEntity(req.params.load_id, LOAD).then((e) => { return e })
-  if (load[0] === undefined || load[0] === null) {
-    return 404
-  }
+  if (load[0] === undefined || load[0] === null) { return 404 }
+  // Check for corrent owner
+  if (load[0].owner != req.auth.sub){ return 401 }
   // Edit load 
   load[0]["volume"] = req.body.volume
   load[0]["item"] = req.body.item
@@ -435,7 +420,9 @@ async function editLoadPATCH(req) {
   if (typeof isError == "number") {return isError}
   // Check if load exists
   let load = await getEntity(req.params.load_id, LOAD).then((e) => { return e })
-  if (load[0] === undefined || load[0] === null) {return 404}
+  if (load[0] === undefined || load[0] === null) { return 404 }
+  // Check for corrent owner
+  if (load[0].owner != req.auth.sub){ return 401 }
   // Edit load
   if (req.body.volume != undefined) { load[0]["volume"] = req.body.volume };
   if (req.body.item != undefined) { load[0]["item"] = req.body.item };
@@ -474,14 +461,15 @@ async function deleteLoad(load_id) {
     return 404
   } 
   // Remove load from boat
-  carrierID = load[0]["carrier"]["id"]
-  let boat = await getEntity(carrierID, BOAT).then((e) => {return e})
-  let removedLoad = boat[0]["loads"].filter(l => l.id != load_id)
-  boat[0]["loads"] = removedLoad
-  delete boat[0]["id"]
-  let keyBoat = datastore.key([BOAT, carrierID]);
-  delete boat[0]["id"]
-  await datastore.save({"key": keyBoat, "data": boat[0]})
+  if (load[0]["carrier"] != null) {
+    carrierID = load[0]["carrier"]["id"]
+    let boat = await getEntity(carrierID, BOAT).then((e) => {return e})
+    let removedLoad = boat[0]["loads"].filter(l => l.id != load_id)
+    boat[0]["loads"] = removedLoad
+    let keyBoat = datastore.key([BOAT, carrierID]);
+    delete boat[0]["id"]
+    await datastore.save({"key": keyBoat, "data": boat[0]})
+  }
   // Delete load
   let keyLoad = datastore.key([LOAD, parseInt(load_id, 10)]);
   await datastore.delete(keyLoad);
@@ -641,7 +629,7 @@ app.put('/boats/:boat_id', (req, res) => {
 });
 
 // Edit load using PUT - all 3 attributes must be provided
-app.put('/loads/:load_id', (req, res) => {
+app.put('/loads/:load_id', checkJwt, (req, res) => {
   editLoadPUT(req)
     .then((results) => {
       if (typeof results == "number") {
@@ -682,7 +670,7 @@ app.patch('/boats/:boat_id', (req, res) => {
 });
 
 // Edit load using PATCH - at least 1 attribute must be provided
-app.patch('/loads/:load_id', (req, res) => {
+app.patch('/loads/:load_id', checkJwt, (req, res) => {
   editLoadPATCH(req)
     .then((results) => {
       if (typeof results == "number") {
@@ -714,11 +702,13 @@ app.delete('/boats/:boat_id', (req, res) => {
 });
 
 // Delete load
-app.delete('/loads/:load_id', (req, res) => {
+app.delete('/loads/:load_id', checkJwt, (req, res) => {
   deleteLoad(req.params.load_id)
     .then((key) => {
       if (key == 404) {
-        res.status(404).send('{"Error": "No load with this load_id exists"}');
+        res.status(404).json({"Error": "No load with this load_id exists"});
+      } else if (key == 401){
+        res.status(401).json(errorRes[key]);
       } else {
         res.status(204).end()
       }
