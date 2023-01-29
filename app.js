@@ -20,8 +20,8 @@ const USER = 'User';
 const BOAT = 'Boat';
 const LOAD = 'Load'; 
 
-const CLIENT_ID = '4aX5xB4pKX5grZ22br5Z0MQVqlCt9TvL';
-const CLIENT_SECRET = 'IS_ZBh4vcCu45pz0wuLj38h9rEYmOOR2DL6gRBT-3MERqJi1nD2OfCZ4PkSarWhT';
+const CLIENT_ID = CLIENT_ID;
+const CLIENT_SECRET = CLIENT_SECRET;
 const DOMAIN = 'boats-and-loads.us.auth0.com';
 const REDIRECT_URI = 'https://boats-and-loads-370115.wl.r.appspot.com/oauth'
 const SCOPE = 'openid email profile'
